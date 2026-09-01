@@ -78,7 +78,7 @@
     <!-- ─── CONFIG — fill these two values ─ -->
     <script>
         // 1. Your Brevo API key (from brevo.com → Settings → API Keys)
-        const BREVO_API_KEY = "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";
+        const BREVO_API_KEY = "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";
 
         // 2. A verified sender email on your Brevo account
         const BREVO_SENDER_EMAIL = "gunduorv29@gmail.com";
@@ -303,7 +303,7 @@
                     </div>
                     <div class="pt-2 border-t border-slate-700 flex justify-between items-center">
                         <span class="text-slate-500 text-xs">Status</span>
-                        <span class="text-green-400 text-xs font-semibold">🔒 Authenticated</span>
+                        <span class="text-green-400 text-xs font-semibold"> Authenticated</span>
                     </div>
                 </div>
                 <button onclick="logout()"
@@ -621,7 +621,7 @@
             S.otp = genOtp();
             setupOtpBoxes();
             startTimer();
-            setEmailStatus('⏳ Resending code to ' + S.email + ' …', 'sending');
+            setEmailStatus('Resending code to ' + S.email + ' …', 'sending');
             try {
                 await sendOtpEmail(S.email, S.name || S.email.split('@')[0], S.otp);
                 setEmailStatus('✅ New code sent to ' + S.email, 'sent');
