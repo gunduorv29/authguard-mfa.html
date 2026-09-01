@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AuthGuard MFA Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #0f172a;
+            font-family: system-ui, sans-serif;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.22s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .otp-box::-webkit-outer-spin-button,
+        .otp-box::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+        }
+
+        .otp-box {
+            -moz-appearance: textfield;
+        }
+
+        @keyframes ripple {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, .4)
+            }
+
+            50% {
+                box-shadow: 0 0 0 14px rgba(59, 130, 246, 0)
+            }
+        }
+
+        .ripple {
+            animation: ripple 2.2s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!--  Toast  -->
+    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden w-80">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 shadow-2xl flex items-start gap-3">
+            <span id="toastIcon" class="text-base mt-0.5 shrink-0"></span>
+            <div class="min-w-0">
+                <p id="toastTitle" class="text-sm font-semibold text-white"></p>
+                <p id="toastMsg" class="text-xs text-slate-400 mt-0.5 break-words"></p>
+            </div>
+        </div>
+    </div>
+
+    <!--  Env warning  -->
+    <div id="envWarn"
+        class="hidden w-full max-w-sm mb-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+        <p class="text-xs text-amber-400 font-semibold">⚠ Run on localhost for biometrics</p>
+        <p class="text-xs text-amber-500 mt-0.5">WebAuthn requires HTTPS or localhost. Open via <code
+                class="bg-slate-800 px-1 rounded">npx serve</code> or similar.</p>
+    </div>
+
+    <div class="w-full max-w-sm">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+
+            <!-- Card header -->
+            <div
+                class="bg-gradient-to-r from-blue-900/40 to-slate-900 border-b border-slate-800 px-5 py-4 flex items-center gap-3">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-white font-semibold text-sm leading-none">AuthGuard</p>
+                    <p class="text-slate-500 text-xs mt-0.5">Secure MFA System</p>
+                </div>
+                <div class="ml-auto flex gap-1.5" id="stepDots">
+                    <div class="dot w-1.5 h-1.5 rounded-full"></div>
+                    <div class="dot w-1.5 h-1.5 rounded-full"></div>
+                    <div class="dot w-1.5 h-1.5 rounded-full"></div>
+                </div>
+            </div>
+
+            <!--  VIEW: Login  -->
+            <div id="viewLogin" class="p-6 fade-in">
+                <h2 class="text-xl font-semibold text-white mb-1">Welcome back</h2>
+                <p class="text-slate-400 text-sm mb-5">Sign in to your account</p>
+                <div class="space-y-3 mb-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">Email</label>
+                        <input id="loginEmail" type="email" placeholder="you@example.com"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">Password</label>
+                        <input id="loginPassword" type="password" placeholder="••••••••"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600" />
+                    </div>
+                </div>
+                <button id="btnLogin"
+                    class="w-full py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold rounded-xl transition text-sm">
+                    Continue →
+                </button>
+                <p class="mt-4 text-center text-xs text-slate-500">
+                    No account? <button onclick="showView('viewRegister')"
+                        class="text-blue-400 hover:text-blue-300">Register here</button>
+                </p>
+            </div>
+
+            <!--  VIEW: Register  -->
+            <div id="viewRegister" class="p-6 hidden fade-in">
+                <button onclick="showView('viewLogin')"
+                    class="text-xs text-slate-400 hover:text-white mb-4 flex items-center gap-1">← Back</button>
+                <h2 class="text-xl font-semibold text-white mb-1">Create account</h2>
+                <p class="text-slate-400 text-sm mb-5">Set up your MFA-protected account</p>
+                <div class="space-y-3 mb-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">Full name</label>
+                        <input id="regName" type="text" placeholder="Ada Okafor"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">Email</label>
+                        <input id="regEmail" type="email" placeholder="you@example.com"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">Password</label>
+                        <input id="regPassword" type="password" placeholder="Min. 8 characters"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600" />
+                    </div>
+                </div>
+                <button id="btnRegister"
+                    class="w-full py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold rounded-xl transition text-sm">
+                    Send OTP →
+                </button>
+            </div>
+
+            <!--  VIEW: OTP  -->
+            <div id="viewOtp" class="p-6 hidden fade-in">
+                <button id="otpBackBtn" class="text-xs text-slate-400 hover:text-white mb-4 flex items-center gap-1">←
+                    Back</button>
+                <h2 class="text-xl font-semibold text-white mb-1">Enter OTP</h2>
+                <p id="otpSubtitle" class="text-slate-400 text-sm mb-4">We sent a 6-digit code to your email</p>
+
+                <!-- Demo OTP reveal badge -->
+                <div id="demoOtpBadge"
+                    class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 mb-5 hidden">
+                    <p class="text-xs text-amber-500 mb-1">Demo — code that would be emailed:</p>
+                    <p id="demoOtpCode" class="text-2xl font-mono font-bold text-amber-300 tracking-[0.3em]"></p>
+                </div>
+
+                <div class="flex gap-2 justify-center mb-3">
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                    <input type="tel" maxlength="1"
+                        class="otp-box w-11 h-12 text-center text-lg font-semibold bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                        inputmode="numeric" />
+                </div>
+
+                <p class="text-xs text-slate-500 text-center mb-4">
+                    Expires in <span id="otpTimer" class="text-blue-400 font-mono">5:00</span>
+                </p>
+                <button id="btnVerifyOtp"
+                    class="w-full py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold rounded-xl transition text-sm">
+                    Verify Code
+                </button>
+                <p class="mt-4 text-center">
+                    <button id="btnResendOtp" class="text-xs text-blue-400 hover:text-blue-300">Resend code</button>
+                </p>
+            </div>
+
+            <!--  VIEW: Biometric  -->
+            <div id="viewBio" class="p-6 hidden fade-in">
+                <h2 class="text-xl font-semibold text-white mb-1" id="bioTitle">Biometric verification</h2>
+                <p id="bioSubtitle" class="text-slate-400 text-sm mb-6">Use your fingerprint or face to confirm it's you
+                </p>
+                <div class="flex flex-col items-center">
+                    <button id="btnBio"
+                        class="ripple w-28 h-28 rounded-full bg-slate-800 border-2 border-slate-700 hover:border-blue-500 active:scale-95 flex items-center justify-center transition-all mb-5 shadow-lg">
+                        <svg class="w-14 h-14 text-slate-400" id="bioIcon" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                        </svg>
+                    </button>
+                    <p id="bioStatus" class="text-sm text-slate-400 text-center mb-2 px-4">Tap to start biometric scan
+                    </p>
+                    <p id="bioEnvNote" class="text-xs text-slate-600 text-center mb-5"></p>
+                    <button id="btnSkipBio"
+                        class="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2">
+                        Skip (demo only)
+                    </button>
+                </div>
+            </div>
+
+            <!--  VIEW: Success  -->
+            <div id="viewSuccess" class="p-8 hidden fade-in text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <svg class="w-9 h-9 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-white mb-1">
+                    Welcome, <span id="successName" class="text-blue-400"></span>!
+                </h2>
+                <p class="text-slate-400 text-sm mb-6">All authentication factors verified.</p>
+
+                <div class="bg-slate-800/60 rounded-xl p-4 text-left text-sm space-y-2.5 mb-6">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 text-xs">Email</span>
+                        <span id="successEmail" class="text-slate-200 text-xs truncate max-w-[170px]"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 text-xs">Password</span>
+                        <span class="text-green-400 text-xs">✓ Verified</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 text-xs">OTP</span>
+                        <span class="text-green-400 text-xs">✓ Verified</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 text-xs">Biometric</span>
+                        <span id="successBio" class="text-xs"></span>
+                    </div>
+                    <div class="pt-2 border-t border-slate-700 flex justify-between items-center">
+                        <span class="text-slate-500 text-xs">Status</span>
+                        <span class="text-green-400 text-xs font-semibold">🔒 Authenticated</span>
+                    </div>
+                </div>
+
+                <button onclick="logout()"
+                    class="w-full py-2.5 border border-slate-700 hover:bg-slate-800 rounded-xl text-sm text-slate-300 transition">
+                    Sign out
+                </button>
+            </div>
+
+        </div>
+        <p class="mt-4 text-xs text-slate-700 text-center leading-relaxed">
+            National Open University of Nigeria · Final Year Project Demo<br>AuthGuard MFA System
+        </p>
+    </div>
+
+    <script>
+        //  State 
+        let S = { flow: 'login', email: '', name: '', otp: '', timer: null, bioSkipped: false };
+
+        //  Mock DB via localStorage 
+        const DB = {
+            get: e => { try { return JSON.parse(localStorage.getItem('ag_u_' + e)) } catch { return null } },
+            save: (e, d) => localStorage.setItem('ag_u_' + e, JSON.stringify(d)),
+            cred: e => localStorage.getItem('ag_c_' + e),
+            saveCred: (e, c) => localStorage.setItem('ag_c_' + e, c),
+        };
+
+        //  View manager 
+        const VIEWS = ['viewLogin', 'viewRegister', 'viewOtp', 'viewBio', 'viewSuccess'];
+        const STEPS = { viewLogin: 0, viewRegister: 0, viewOtp: 1, viewBio: 2, viewSuccess: 2 };
+
+        function showView(id) {
+            VIEWS.forEach(v => {
+                const el = document.getElementById(v);
+                v === id ? (el.classList.remove('hidden'), el.classList.add('fade-in'))
+                    : el.classList.add('hidden');
+            });
+            const dots = document.querySelectorAll('.dot');
+            const step = STEPS[id] ?? 0;
+            dots.forEach((d, i) => d.className = `dot w-1.5 h-1.5 rounded-full ${i <= step ? 'bg-blue-500' : 'bg-slate-700'}`);
+        }
+
+        //  Toast 
+        let toastTimer;
+        function toast(title, msg, type = 'info') {
+            const icons = { info: 'ℹ️', success: '✅', error: '❌', warn: '⚠️' };
+            document.getElementById('toastIcon').textContent = icons[type] || 'ℹ️';
+            document.getElementById('toastTitle').textContent = title;
+            document.getElementById('toastMsg').textContent = msg;
+            const el = document.getElementById('toast');
+            el.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.add('hidden'), 4500);
+        }
+
+        //  OTP 
+        function genOtp() { return Math.floor(100000 + Math.random() * 900000).toString(); }
+
+        function startTimer(secs = 300) {
+            clearInterval(S.timer);
+            const el = document.getElementById('otpTimer');
+            el.className = 'text-blue-400 font-mono';
+            let t = secs;
+            (function tick() {
+                el.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+                if (--t < 0) { el.textContent = 'Expired'; el.className = 'text-red-400 font-mono'; return; }
+                S.timer = setTimeout(tick, 1000);
+            })();
+        }
+
+        function setupOtpBoxes() {
+            const boxes = [...document.querySelectorAll('.otp-box')];
+            boxes.forEach(b => b.value = '');
+            boxes.forEach((b, i) => {
+                b.oninput = () => {
+                    b.value = b.value.replace(/\D/g, '').slice(-1);
+                    if (b.value && i < boxes.length - 1) boxes[i + 1].focus();
+                };
+                b.onkeydown = e => { if (e.key === 'Backspace' && !b.value && i > 0) boxes[i - 1].focus(); };
+                b.onpaste = e => {
+                    e.preventDefault();
+                    const p = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+                    boxes.forEach((b, j) => b.value = p[j] || '');
+                    boxes[Math.min(p.length, 5)].focus();
+                };
+            });
+        }
+
+        function getOtp() { return [...document.querySelectorAll('.otp-box')].map(b => b.value).join(''); }
+
+        function launchOtpView(flow) {
+            S.flow = flow;
+            S.otp = genOtp();
+            document.getElementById('otpSubtitle').textContent = `Code for ${S.email} (demo: shown below)`;
+            document.getElementById('demoOtpBadge').classList.remove('hidden');
+            document.getElementById('demoOtpCode').textContent = S.otp;
+            document.getElementById('otpBackBtn').onclick = () => showView(flow === 'register' ? 'viewRegister' : 'viewLogin');
+            setupOtpBoxes();
+            startTimer();
+            showView('viewOtp');
+        }
+
+        //  WebAuthn helpers 
+        function b64url(buf) {
+            return btoa(String.fromCharCode(...new Uint8Array(buf)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+        function fromB64(s) {
+            const b = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+            return Uint8Array.from(b, c => c.charCodeAt(0)).buffer;
+        }
+
+        async function webAuthnEnroll(email, name) {
+            const ch = crypto.getRandomValues(new Uint8Array(32));
+            const rpId = location.hostname || 'localhost';
+            const cred = await navigator.credentials.create({
+                publicKey: {
+                    challenge: ch,
+                    rp: { name: 'AuthGuard MFA', id: rpId },
+                    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: email, displayName: name },
+                    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+                    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+                    timeout: 60000,
+                }
+            });
+            DB.saveCred(email, b64url(cred.rawId));
+            return cred;
+        }
+
+        async function webAuthnVerify(email) {
+            const stored = DB.cred(email);
+            if (!stored) throw new Error('No biometric registered for this account');
+            const ch = crypto.getRandomValues(new Uint8Array(32));
+            const rpId = location.hostname || 'localhost';
+            return navigator.credentials.get({
+                publicKey: {
+                    challenge: ch, rpId,
+                    allowCredentials: [{ type: 'public-key', id: fromB64(stored), transports: ['internal'] }],
+                    userVerification: 'required',
+                    timeout: 60000,
+                }
+            });
+        }
+
+        //  Bio view 
+        function launchBioView(mode) { // 'enroll' | 'verify'
+            const supported = !!window.PublicKeyCredential;
+            const isSecure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+
+            document.getElementById('bioTitle').textContent = mode === 'enroll' ? 'Register Biometric' : 'Biometric Verification';
+            document.getElementById('bioSubtitle').textContent = mode === 'enroll'
+                ? 'Register your fingerprint or face ID for future logins'
+                : 'Confirm your identity with fingerprint or face';
+            document.getElementById('bioEnvNote').textContent = !supported ? '⚠ WebAuthn not available on this browser'
+                : !isSecure ? '⚠ Needs localhost or HTTPS — skip in demo'
+                    : '✓ WebAuthn ready on this device';
+
+            document.getElementById('btnBio').onclick = async () => {
+                if (!supported || !isSecure) {
+                    toast('Not available', 'WebAuthn needs localhost or HTTPS', 'warn'); return;
+                }
+                const statusEl = document.getElementById('bioStatus');
+                const btn = document.getElementById('btnBio');
+                btn.classList.add('border-blue-500');
+                statusEl.textContent = 'Follow the browser prompt…';
+
+                try {
+                    if (mode === 'enroll') { await webAuthnEnroll(S.email, S.name); }
+                    else { await webAuthnVerify(S.email); }
+                    S.bioSkipped = false;
+                    statusEl.textContent = mode === 'enroll' ? '✓ Biometric registered!' : '✓ Biometric verified!';
+                    setTimeout(showSuccess, 600);
+                } catch (err) {
+                    btn.classList.remove('border-blue-500');
+                    statusEl.textContent = `Failed: ${err.message}`;
+                    toast('Biometric error', err.message, 'error');
+                }
+            };
+
+            document.getElementById('btnSkipBio').onclick = () => { S.bioSkipped = true; showSuccess(); };
+            showView('viewBio');
+        }
+
+        //  Success 
+        function showSuccess() {
+            document.getElementById('successName').textContent = S.name || S.email.split('@')[0];
+            document.getElementById('successEmail').textContent = S.email;
+            const bioEl = document.getElementById('successBio');
+            bioEl.textContent = S.bioSkipped ? '⚠ Skipped (demo)' : '✓ Verified';
+            bioEl.className = S.bioSkipped ? 'text-xs text-amber-400' : 'text-xs text-green-400';
+            showView('viewSuccess');
+        }
+
+        function logout() {
+            clearInterval(S.timer);
+            S = { flow: 'login', email: '', name: '', otp: '', timer: null, bioSkipped: false };
+            ['loginEmail', 'loginPassword'].forEach(id => document.getElementById(id).value = '');
+            showView('viewLogin');
+        }
+
+        //  Login handler 
+        document.getElementById('btnLogin').onclick = () => {
+            const email = document.getElementById('loginEmail').value.trim();
+            const pw = document.getElementById('loginPassword').value;
+            if (!email || !pw) { toast('Missing fields', 'Enter email and password', 'warn'); return; }
+            const user = DB.get(email);
+            if (!user) { toast('Not found', 'No account with that email. Register first.', 'error'); return; }
+            if (user.pw !== btoa(pw)) { toast('Wrong password', 'Incorrect password', 'error'); return; }
+            S.email = email; S.name = user.name;
+            launchOtpView('login');
+        };
+
+        //  Register handler 
+        document.getElementById('btnRegister').onclick = () => {
+            const name = document.getElementById('regName').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const pw = document.getElementById('regPassword').value;
+            if (!name || !email || !pw) { toast('Missing fields', 'Fill all fields', 'warn'); return; }
+            if (pw.length < 8) { toast('Weak password', 'Minimum 8 characters', 'warn'); return; }
+            if (DB.get(email)) { toast('Already registered', 'Login instead', 'warn'); return; }
+            DB.save(email, { name, pw: btoa(pw) });
+            S.email = email; S.name = name;
+            launchOtpView('register');
+        };
+
+        //  OTP verify handler 
+        document.getElementById('btnVerifyOtp').onclick = () => {
+            const entered = getOtp();
+            if (entered.length < 6) { toast('Incomplete', 'Enter all 6 digits', 'warn'); return; }
+            if (entered !== S.otp) { toast('Wrong code', 'OTP does not match. Try again.', 'error'); return; }
+            clearTimeout(S.timer);
+            toast('OTP verified ✓', 'Proceeding to biometric step', 'success');
+            const hasCred = !!DB.cred(S.email);
+            // Enroll on first login too if no credential stored yet
+            setTimeout(() => launchBioView(S.flow === 'register' || !hasCred ? 'enroll' : 'verify'), 400);
+        };
+
+        //  Resend OTP 
+        document.getElementById('btnResendOtp').onclick = () => {
+            S.otp = genOtp();
+            document.getElementById('demoOtpCode').textContent = S.otp;
+            setupOtpBoxes();
+            startTimer();
+            toast('Code resent', 'New demo code shown on screen', 'info');
+        };
+
+        //  Init 
+        (function init() {
+            const isSecure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+            if (!isSecure) document.getElementById('envWarn').classList.remove('hidden');
+            showView('viewLogin');
+        })();
+    </script>
+</body>
+
+</html>
