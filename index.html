@@ -75,42 +75,61 @@
 
 <body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- ─── CONFIG — fill these two values ─ -->
+    /* ─── CONFIG — fill these two values ─ */
     <script>
-        // 1. Your Brevo API key (from brevo.com → Settings → API Keys)
-        const BREVO_API_KEY = "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";
+        // 1. Your Brevo API key - REMOVE the "xkeysib-" prefix if you're using v3 API
+        // For Brevo v3 API, the key should NOT include "xkeysib-" prefix
+        const BREVO_API_KEY = "2aecedfbceea7fddb0253846472979bd3b6619079aaa9699cee55f6860083021-gWRgkXozeMcnm7vL";
 
         // 2. A verified sender email on your Brevo account
         const BREVO_SENDER_EMAIL = "gunduorv29@gmail.com";
-            const BREVO_SENDER_NAME = "AuthGuard";
+        const BREVO_SENDER_NAME = "AuthGuard";
 
         async function sendOtpEmail(toEmail, toName, otp) {
-            const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "api-key": BREVO_API_KEY
-                },
-                body: JSON.stringify({
-                    sender: {
-                        name: "AuthGuard",
-                        email: BREVO_SENDER_EMAIL
-                    },
-                    to: [
-                        {
-                            email: toEmail,
-                            name: toName
-                        }
-                    ],
-                    subject: "Your AuthGuard OTP Code",
-                    htmlContent: `<p>Your OTP is <strong>${otp}</strong></p>`
-                })
-            });
+            const htmlBody = `
+                <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0f172a;border-radius:16px;">
+                    <!-- Your HTML template here -->
+                    <div style="font-size:40px;font-weight:700;letter-spacing:0.3em;color:#60a5fa;font-family:monospace;">${otp}</div>
+                </div>
+            `;
 
-            return response;
+            try {
+                const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "api-key": BREVO_API_KEY,  // This must be the correct key without "xkeysib-" prefix
+                        "accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        sender: {
+                            name: BREVO_SENDER_NAME,
+                            email: BREVO_SENDER_EMAIL
+                        },
+                        to: [
+                            {
+                                email: toEmail,
+                                name: toName || toEmail.split('@')[0]
+                            }
+                        ],
+                        subject: `Your AuthGuard OTP Code: ${otp}`,
+                        htmlContent: htmlBody
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Brevo API error:', errorData);
+                    throw new Error(errorData.message || `Brevo API error: ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Failed to send email:', error);
+                throw error;
+            }
         }
     </script>
-    <!-- ─── -->
 
     <!-- Toast -->
     <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden w-80">
